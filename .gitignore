@@ -101,3 +101,5 @@ heartrate-power
 # mypy
 .mypy_cache/
 
+# data directory
+/data
