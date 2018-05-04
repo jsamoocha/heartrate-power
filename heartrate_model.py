@@ -49,4 +49,5 @@ def heartrate_model(heartrate, power, **kwargs):
     )
 
     predictions = _heartrate_model_predict(model.params, power)
+
     return model, predictions
