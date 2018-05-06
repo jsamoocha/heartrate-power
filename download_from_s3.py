@@ -12,18 +12,28 @@ def download_from_s3():
     s3 = boto3.resource('s3')
     s3_bucket = s3.Bucket(s3_bucket_name)
 
+    athletes = set()
 
     for obj in s3_bucket.objects.all():
         match = re.search('^(?P<athlete>.*)/(?P<activity>.*).json$', obj.key)
-        athlete = match.group('athlete')
-        activity = match.group('activity')
 
-        directory = os.path.join('data', athlete)
-        if not os.path.exists(directory):
-            os.makedirs(directory)
+        if match:
+            athlete = match.group('athlete')
+            activity = match.group('activity')
 
-        r = requests.get(s3_base_url.format(key=obj.key))
-        with open(os.path.join(directory, activity + '.json'), "w") as f:
+            directory = os.path.join('data', athlete)
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+
+            athletes.add(athlete)
+
+            r = requests.get(s3_base_url.format(key=obj.key))
+            with open(os.path.join(directory, activity + '.json'), "w") as f:
+                f.write(r.content.decode('utf-8'))
+
+    for athlete in athletes:
+        r = requests.get(s3_base_url.format(key=athlete + '.csv'))
+        with open(os.path.join('data', athlete + '_activities.csv'), 'w') as f:
             f.write(r.content.decode('utf-8'))
 
 
