@@ -5,6 +5,8 @@ import time
 
 import pandas as pd
 
+from functools import partial
+
 from heartrate_model import heartrate_model
 
 
@@ -14,9 +16,9 @@ ATHLETES = [
 ]
 
 
-def _process_single_file(filename):
+def _process_single_file(filename, athlete):
     df = pd.read_json(
-        os.path.join('data', _process_single_file.athlete, filename),
+        os.path.join('data', athlete, filename),
         orient='split'
     )
 
@@ -29,33 +31,27 @@ def _process_single_file(filename):
         )
     except ValueError:
         # Brute way to handle fitting errors
+        print(f'Fitting error processing {filename}')
         return
 
     fit = {key: value.value for key, value in model.params.items()}
-    fit['athlete_id'] = _process_single_file.athlete
+    fit['athlete_id'] = athlete
     fit['activity_id'] = filename.split('.')[0]
     
-    _process_single_file.queue.put(fit)
-
-
-def _func_init(queue, athlete):
-    _process_single_file.queue = queue
-    _process_single_file.athlete = athlete
+    return fit
 
 
 def batch_model_fit(athlete):
     start_time = time.time()
 
     files_for_athlete = os.listdir(os.path.join('data', athlete))
-    queue = mp.Queue()
-    with mp.Pool(mp.cpu_count(), _func_init, [queue, athlete]) as pool:
-        pool.map(_process_single_file, files_for_athlete, chunksize=10)
+    process_file_fn = partial(_process_single_file, athlete=athlete)
 
-    model_fits = []
-    while not queue.empty():
-        model_fits.append(queue.get())
-    df = pd.DataFrame(model_fits)
-    df.to_csv(datetime.datetime.now().isoformat() + '.csv')
+    with mp.Pool(processes=mp.cpu_count() - 1) as pool:
+        model_fits = pool.map(process_file_fn, files_for_athlete, chunksize=10)
+
+    df = pd.DataFrame((fit for fit in model_fits if fit))
+    df.to_csv(datetime.datetime.now().isoformat() + '.csv', index=False)
 
     duration = time.time() - start_time
     if duration >= 60:
